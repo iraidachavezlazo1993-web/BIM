@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Visor de Indicadores BIM</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #f7f6f3; --card: #ffffff; --border: #e2e0d8;
+    --text: #1a1a18; --muted: #6b6963; --hint: #9b9890;
+    --blue-bg: #e6f1fb; --blue-txt: #0c447c; --blue-mid: #378add;
+    --teal-bg: #e1f5ee; --teal-txt: #085041; --teal-mid: #1d9e75;
+    --amber-bg: #faeeda; --amber-txt: #633806; --amber-mid: #ba7517;
+    --red-bg: #fcebeb; --red-txt: #791f1f; --red-mid: #e24b4a;
+    --radius: 10px; --radius-sm: 6px;
+  }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; background: var(--bg); color: var(--text); font-size: 15px; line-height: 1.6; }
+  header { background: var(--card); border-bottom: 1px solid var(--border); padding: 1rem 2rem; display: flex; align-items: center; gap: 12px; }
+  header .logo { width: 36px; height: 36px; background: var(--blue-mid); border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 700; font-size: 14px; flex-shrink: 0; }
+  header h1 { font-size: 18px; font-weight: 600; color: var(--text); }
+  header p { font-size: 13px; color: var(--muted); }
+  .main { max-width: 1100px; margin: 0 auto; padding: 1.5rem 1.5rem 3rem; }
+  .filter-bar { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.25rem 1.5rem; margin-bottom: 1.5rem; display: flex; flex-wrap: wrap; gap: 1rem; align-items: flex-end; }
+  .filter-group { display: flex; flex-direction: column; gap: 4px; }
+  .filter-group label { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+  .filter-group select, .filter-group input[type=range] { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 6px 10px; font-size: 14px; color: var(--text); background: var(--bg); min-width: 120px; }
+  .filter-group select:focus { outline: none; border-color: var(--blue-mid); }
+  .range-row { display: flex; align-items: center; gap: 8px; }
+  .range-label { font-size: 13px; font-weight: 600; color: var(--blue-txt); min-width: 90px; }
+  input[type=range] { accent-color: var(--blue-mid); width: 220px; }
+  .btn-reset { padding: 6px 16px; background: transparent; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 13px; color: var(--muted); cursor: pointer; transition: all 0.15s; }
+  .btn-reset:hover { background: var(--border); color: var(--text); }
+  .filter-note { font-size: 12px; color: var(--hint); padding-top: 4px; width: 100%; }
+  .metrics-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 1.5rem; }
+  .metric { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem 1.25rem; }
+  .metric .m-label { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 6px; }
+  .metric .m-value { font-size: 26px; font-weight: 700; color: var(--text); }
+  .metric .m-sub { font-size: 12px; color: var(--hint); margin-top: 2px; }
+  .metric.blue { border-left: 3px solid var(--blue-mid); }
+  .metric.teal { border-left: 3px solid var(--teal-mid); }
+  .metric.amber { border-left: 3px solid var(--amber-mid); }
+  .metric.red { border-left: 3px solid var(--red-mid); }
+  .grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.5rem; margin-bottom: 1.5rem; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.25rem 1.5rem; }
+  .card-title { font-size: 14px; font-weight: 700; color: var(--text); margin-bottom: 2px; }
+  .card-sub { font-size: 12px; color: var(--muted); margin-bottom: 1rem; }
+  .ind-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .ind-table th { text-align: left; color: var(--muted); font-weight: 600; padding: 5px 8px; border-bottom: 1px solid var(--border); font-size: 11px; text-transform: uppercase; letter-spacing: 0.03em; }
+  .ind-table td { padding: 8px; border-bottom: 1px solid #f0ede8; color: var(--text); }
+  .ind-table tr:last-child td { border-bottom: none; }
+  .badge { display: inline-block; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 99px; }
+  .badge-blue { background: var(--blue-bg); color: var(--blue-txt); }
+  .badge-teal { background: var(--teal-bg); color: var(--teal-txt); }
+  .badge-amber { background: var(--amber-bg); color: var(--amber-txt); }
+  .bar-mini { height: 6px; background: #eee; border-radius: 3px; overflow: hidden; margin-top: 3px; }
+  .bar-mini-fill { height: 100%; border-radius: 3px; }
+  .insight-box { background: var(--blue-bg); border-left: 3px solid var(--blue-mid); border-radius: 0 var(--radius-sm) var(--radius-sm) 0; padding: 0.75rem 1rem; margin-top: 1rem; font-size: 13px; color: var(--blue-txt); line-height: 1.6; }
+  .warn-box { background: var(--amber-bg); border-left: 3px solid var(--amber-mid); border-radius: 0 var(--radius-sm) var(--radius-sm) 0; padding: 0.75rem 1rem; margin-top: 0.75rem; font-size: 13px; color: var(--amber-txt); line-height: 1.6; }
+  .composition-list { display: flex; flex-direction: column; gap: 8px; }
+  .comp-row { display: flex; align-items: center; gap: 10px; }
+  .comp-dot { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+  .comp-label { font-size: 13px; color: var(--text); flex: 1; }
+  .comp-num { font-size: 14px; font-weight: 700; color: var(--text); min-width: 36px; text-align: right; }
+  .comp-pct { font-size: 12px; color: var(--muted); min-width: 42px; text-align: right; }
+  .footer-note { font-size: 12px; color: var(--hint); text-align: center; margin-top: 2rem; padding-top: 1rem; border-top: 1px solid var(--border); }
+  .no-data { text-align: center; color: var(--hint); font-size: 13px; padding: 1.5rem; }
+  @media (max-width: 700px) {
+    .metrics-grid { grid-template-columns: repeat(2, 1fr); }
+    .grid2 { grid-template-columns: 1fr; }
+    header { padding: 1rem; }
+    .main { padding: 1rem; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">BIM</div>
+  <div>
+    <h1>Visor de Indicadores BIM</h1>
+    <p>Inversión Pública — Expediente Técnico y Rendimiento de Plazos</p>
+  </div>
+</header>
+
+<div class="main">
+
+  <div class="filter-bar">
+    <div class="filter-group">
+      <label>Rango de monto</label>
+      <select id="filtroRango">
+        <option value="todos">Todos los rangos</option>
+        <option value="<3.5MM]">Pequeñas (&lt;3.5M)</option>
+        <option value="<3.5MM-60MM]">Medianas (3.5M – 60M)</option>
+        <option value="[60MM+>">Grandes (+60M)</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <label>Año de registro (desde)</label>
+      <div class="range-row">
+        <input type="range" id="filtroAnioDesde" min="2001" max="2025" value="2001" step="1">
+        <span class="range-label" id="labelDesde">Desde 2001</span>
+      </div>
+    </div>
+    <div class="filter-group">
+      <label>Año de registro (hasta)</label>
+      <div class="range-row">
+        <input type="range" id="filtroAnioHasta" min="2001" max="2025" value="2025" step="1">
+        <span class="range-label" id="labelHasta">Hasta 2025</span>
+      </div>
+    </div>
+    <button class="btn-reset" onclick="resetFiltros()">Restablecer</button>
+    <div class="filter-note" id="filterNote">Mostrando todos los registros con año de registro disponible.</div>
+  </div>
+
+  <div class="metrics-grid">
+    <div class="metric blue">
+      <div class="m-label">Total obras</div>
+      <div class="m-value" id="mTotal">—</div>
+      <div class="m-sub">en el filtro seleccionado</div>
+    </div>
+    <div class="metric teal">
+      <div class="m-label">Con Exp. Técnico</div>
+      <div class="m-value" id="mET">—</div>
+      <div class="m-sub">obras con datos de plazo ET</div>
+    </div>
+    <div class="metric amber">
+      <div class="m-label">Con seguimiento SPI</div>
+      <div class="m-value" id="mSPI">—</div>
+      <div class="m-sub">obras con avance registrado</div>
+    </div>
+    <div class="metric red">
+      <div class="m-label">Sin ET ni ejecución</div>
+      <div class="m-value" id="mSin">—</div>
+      <div class="m-sub">sin datos en banco</div>
+    </div>
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <div class="card-title">Indicador 1 — Plazo promedio del Expediente Técnico</div>
+      <div class="card-sub">Tiempo promedio (meses) desde inicio hasta aprobación del ET, por rango de monto</div>
+      <table class="ind-table" id="tablaET">
+        <thead><tr><th>Rango</th><th>N° obras</th><th>Plazo prom. (meses)</th><th>Distribución</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <div class="insight-box" id="insightET">Calculando...</div>
+    </div>
+    <div class="card">
+      <div class="card-title">Indicador 2 — Rendimiento de plazos (SPI)</div>
+      <div class="card-sub">Porcentaje de avance real sobre avance programado (Schedule Performance Index)</div>
+      <table class="ind-table" id="tablaSPI">
+        <thead><tr><th>Rango</th><th>N° obras</th><th>SPI promedio (%)</th><th>Distribución</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <div class="warn-box" id="insightSPI">Calculando...</div>
+    </div>
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <div class="card-title">Composición del portafolio filtrado</div>
+      <div class="card-sub">Clasificación de las obras según disponibilidad de datos</div>
+      <div class="composition-list" id="composicion"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Distribución por año de registro</div>
+      <div class="card-sub">Obras incluidas en el filtro actual</div>
+      <div style="position:relative; height:200px;">
+        <canvas id="chartAnio" role="img" aria-label="Distribución de obras por año de registro">Cantidad de obras por año</canvas>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer-note">
+    Fuente: Base de datos BIM — Banco de Inversiones del Perú | Corte: 08/04/2026<br>
+    6 CUI excluidos por falta de información en el Banco de Inversiones. El análisis considera únicamente los registros con año de registro disponible.
+  </div>
+</div>
+
+<script>
+const DATA = [{"cui": "2691661", "anio": 2025, "rango": "<3.5MM-60MM]", "monto": 3763181.78, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2709656", "anio": 2025, "rango": "<3.5MM-60MM]", "monto": 10854123.5, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2672936", "anio": 2024, "rango": "<3.5MM-60MM]", "monto": 6461269.86, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2689310", "anio": 2025, "rango": "<3.5MM-60MM]", "monto": 10210530.8, "obra_total": 1, "obra_et": 1, "obra_spi": 0, "plazo": 1.9666666666666666, "avance": null}, {"cui": "2685571", "anio": 2025, "rango": "<3.5MM-60MM]", "monto": 16976299.32, "obra_total": 1, "obra_et": 1, "obra_spi": 0, "plazo": 1.9666666666666666, "avance": null}, {"cui": "2671359", "anio": 2024, "rango": "<3.5MM]", "monto": 616857.12, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2669491", "anio": 2025, "rango": "<3.5MM-60MM]", "monto": 24371904.88, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2680701", "anio": 2025, "rango": "<3.5MM-60MM]", "monto": 19195670.79, "obra_total": 1, "obra_et": 1, "obra_spi": 0, "plazo": 3.066666666666667, "avance": null}, {"cui": "2710604", "anio": 2025, "rango": "<3.5MM-60MM]", "monto": 30577214.32, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2711631", "anio": 2025, "rango": "<3.5MM-60MM]", "monto": 38902095.04, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2716331", "anio": 2025, "rango": "<3.5MM-60MM]", "monto": 7433243.28, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2664615", "anio": 2024, "rango": "[60MM+>", "monto": 73889558.59, "obra_total": 1, "obra_et": 1, "obra_spi": 0, "plazo": 4.033333333333333, "avance": null}, {"cui": "2501911", "anio": 2020, "rango": "[60MM+>", "monto": 78681526.41, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2502170", "anio": 2020, "rango": "[60MM+>", "monto": 79136164.19, "obra_total": 1, "obra_et": 1, "obra_spi": 0, "plazo": 8.1, "avance": null}, {"cui": "2671309", "anio": 2024, "rango": "[60MM+>", "monto": 78907693.76, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2673309", "anio": 2024, "rango": "<3.5MM-60MM]", "monto": 37444281.62, "obra_total": 1, "obra_et": 1, "obra_spi": 0, "plazo": 6.1, "avance": null}, {"cui": "2462394", "anio": 2019, "rango": "<3.5MM-60MM]", "monto": 31411827.35, "obra_total": 2, "obra_et": 2, "obra_spi": 0, "plazo": 3.033333333333333, "avance": null}, {"cui": "2539169", "anio": 2021, "rango": "<3.5MM-60MM]", "monto": 8816892.66, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2484532", "anio": 2020, "rango": "<3.5MM-60MM]", "monto": 29302579.42, "obra_total": 1, "obra_et": 1, "obra_spi": 0, "plazo": 2.033333333333333, "avance": null}, {"cui": "2453169", "anio": 2019, "rango": "<3.5MM-60MM]", "monto": 9370881.9, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2433305", "anio": 2018, "rango": "<3.5MM-60MM]", "monto": 16580571.38, "obra_total": 1, "obra_et": 1, "obra_spi": 0, "plazo": 2.066666666666667, "avance": null}, {"cui": "2324297", "anio": 2016, "rango": "<3.5MM-60MM]", "monto": 8131983, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2198272", "anio": 2012, "rango": "<3.5MM-60MM]", "monto": 19141540, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2503951", "anio": 2020, "rango": "[60MM+>", "monto": 71661575.97, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2498863", "anio": 2020, "rango": "<3.5MM-60MM]", "monto": 49202842.19, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2502642", "anio": 2020, "rango": "<3.5MM-60MM]", "monto": 37712161.68, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2543756", "anio": 2022, "rango": "<3.5MM-60MM]", "monto": 13248519.61, "obra_total": 1, "obra_et": 1, "obra_spi": 0, "plazo": 1, "avance": null}, {"cui": "2676187", "anio": 2025, "rango": "[60MM+>", "monto": 125075587.55, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2470018", "anio": 2019, "rango": "[60MM+>", "monto": 1838339464.56, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2650070", "anio": 2025, "rango": "[60MM+>", "monto": 211514375.85, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2383531", "anio": 2018, "rango": "<3.5MM-60MM]", "monto": 58779939.91, "obra_total": 1, "obra_et": 1, "obra_spi": 1, "plazo": 5.1, "avance": 97.96976872489698}, {"cui": "2339730", "anio": 2017, "rango": "<3.5MM-60MM]", "monto": 42851209, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2678785", "anio": 2025, "rango": "[60MM+>", "monto": 419270019.55, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2565263", "anio": 2022, "rango": "<3.5MM-60MM]", "monto": 3618429.8, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2563772", "anio": 2022, "rango": "<3.5MM-60MM]", "monto": 22999500.5, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2701467", "anio": 2025, "rango": "<3.5MM-60MM]", "monto": 14982497.11, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2533649", "anio": 2021, "rango": "<3.5MM]", "monto": 2017951.41, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2533362", "anio": 2021, "rango": "<3.5MM]", "monto": 1816367.44, "obra_total": 2, "obra_et": 2, "obra_spi": 0, "plazo": 2.033333333333333, "avance": null}, {"cui": "2643632", "anio": 2024, "rango": "<3.5MM-60MM]", "monto": 6700948.76, "obra_total": 1, "obra_et": 1, "obra_spi": 0, "plazo": 2, "avance": null}, {"cui": "2661726", "anio": 2024, "rango": "<3.5MM-60MM]", "monto": 22940507.75, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2681097", "anio": 2025, "rango": "<3.5MM-60MM]", "monto": 12275719.92, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2543377", "anio": 2022, "rango": "<3.5MM-60MM]", "monto": 4262785.44, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2528921", "anio": 2021, "rango": "<3.5MM-60MM]", "monto": 3963284.84, "obra_total": 1, "obra_et": 1, "obra_spi": 0, "plazo": 2.033333333333333, "avance": null}, {"cui": "2663119", "anio": 2024, "rango": "[60MM+>", "monto": 73239861.35, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2662921", "anio": 2024, "rango": "<3.5MM]", "monto": 2557393.48, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2529081", "anio": 2021, "rango": "<3.5MM]", "monto": 2380938.03, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2629298", "anio": 2024, "rango": "<3.5MM-60MM]", "monto": 9714180.03, "obra_total": 1, "obra_et": 1, "obra_spi": 0, "plazo": 2, "avance": null}, {"cui": "2693036", "anio": 2025, "rango": "<3.5MM-60MM]", "monto": 11605525.77, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2672597", "anio": 2024, "rango": "<3.5MM]", "monto": 845712.94, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2596794", "anio": 2023, "rango": "<3.5MM-60MM]", "monto": 31148446.35, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2596816", "anio": 2023, "rango": "<3.5MM-60MM]", "monto": 17804952.12, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2701891", "anio": 2025, "rango": "<3.5MM]", "monto": 1049236.82, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2713108", "anio": 2025, "rango": "<3.5MM-60MM]", "monto": 12325051.97, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2715215", "anio": 2025, "rango": "<3.5MM]", "monto": 3406581.1, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2701558", "anio": 2025, "rango": "<3.5MM-60MM]", "monto": 9716157.64, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2709872", "anio": 2025, "rango": "<3.5MM-60MM]", "monto": 9984259.76, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2566559", "anio": 2022, "rango": "<3.5MM-60MM]", "monto": 10734033.59, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2672653", "anio": 2024, "rango": "<3.5MM]", "monto": 2495426.23, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2715694", "anio": 2025, "rango": "<3.5MM-60MM]", "monto": 12025457.36, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2560593", "anio": 2022, "rango": "<3.5MM-60MM]", "monto": 5895879.67, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2647253", "anio": 2024, "rango": "<3.5MM-60MM]", "monto": 47527215.51, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2566168", "anio": 2022, "rango": "<3.5MM-60MM]", "monto": 5826316.06, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2716274", "anio": 2025, "rango": "<3.5MM]", "monto": 1302855.07, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2715933", "anio": 2025, "rango": "<3.5MM-60MM]", "monto": 8224439.01, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2705981", "anio": 2025, "rango": "<3.5MM]", "monto": 2505734.14, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2711377", "anio": 2025, "rango": "<3.5MM-60MM]", "monto": 10672879.62, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2706676", "anio": 2025, "rango": "<3.5MM-60MM]", "monto": 11633372.88, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2717000", "anio": 2025, "rango": "<3.5MM-60MM]", "monto": 11730358.44, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2714725", "anio": 2025, "rango": "<3.5MM-60MM]", "monto": 14719829.4, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2525813", "anio": 2021, "rango": "<3.5MM-60MM]", "monto": 27407178.99, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2588384", "anio": 2023, "rango": "<3.5MM-60MM]", "monto": 7421596.52, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2588756", "anio": 2023, "rango": "<3.5MM]", "monto": 1712914.89, "obra_total": 1, "obra_et": 1, "obra_spi": 0, "plazo": 2.033333333333333, "avance": null}, {"cui": "2647761", "anio": 2024, "rango": "<3.5MM-60MM]", "monto": 25609893.11, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2661159", "anio": 2024, "rango": "<3.5MM-60MM]", "monto": 18658639.87, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2605228", "anio": 2023, "rango": "<3.5MM-60MM]", "monto": 19189633.42, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2606044", "anio": 2023, "rango": "<3.5MM-60MM]", "monto": 19949809.96, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2714287", "anio": 2025, "rango": "<3.5MM-60MM]", "monto": 14788255.2, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2601150", "anio": 2023, "rango": "<3.5MM-60MM]", "monto": 21239258.75, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2670165", "anio": 2024, "rango": "<3.5MM-60MM]", "monto": 28844401.92, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2519266", "anio": 2021, "rango": "<3.5MM-60MM]", "monto": 4838639.88, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2684816", "anio": 2025, "rango": "<3.5MM-60MM]", "monto": 17358909.75, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2653402", "anio": 2024, "rango": "<3.5MM-60MM]", "monto": 35840909.13, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2585708", "anio": 2023, "rango": "<3.5MM-60MM]", "monto": 30636279, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2647427", "anio": 2024, "rango": "<3.5MM-60MM]", "monto": 36708457.44, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2671604", "anio": 2024, "rango": "<3.5MM-60MM]", "monto": 21792606.61, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2710273", "anio": 2025, "rango": "<3.5MM-60MM]", "monto": 20285593.57, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2714921", "anio": 2025, "rango": "<3.5MM-60MM]", "monto": 21056525.75, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2708074", "anio": 2025, "rango": "<3.5MM-60MM]", "monto": 28086811.66, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2563012", "anio": 2022, "rango": "<3.5MM-60MM]", "monto": 4351503.85, "obra_total": 1, "obra_et": 1, "obra_spi": 0, "plazo": 1, "avance": null}, {"cui": "2677243", "anio": 2025, "rango": "<3.5MM-60MM]", "monto": 23531057.89, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2649718", "anio": 2024, "rango": "<3.5MM-60MM]", "monto": 6717072.3, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2657709", "anio": 2024, "rango": "<3.5MM]", "monto": 3001210.7, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2656581", "anio": 2024, "rango": "<3.5MM-60MM]", "monto": 6610506.12, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2669310", "anio": 2024, "rango": "<3.5MM-60MM]", "monto": 28910041.18, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2652824", "anio": 2024, "rango": "<3.5MM-60MM]", "monto": 4088534.17, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2687147", "anio": 2025, "rango": "<3.5MM]", "monto": 2872889.59, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2672784", "anio": 2024, "rango": "<3.5MM]", "monto": 2641623.35, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2676722", "anio": 2025, "rango": "<3.5MM]", "monto": 3130550.57, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2701940", "anio": 2025, "rango": "<3.5MM]", "monto": 1982008.85, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2701149", "anio": 2025, "rango": "<3.5MM-60MM]", "monto": 8081166.29, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2715200", "anio": 2025, "rango": "<3.5MM-60MM]", "monto": 11294653.96, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2283539", "anio": 2022, "rango": "<3.5MM-60MM]", "monto": 31720841.91, "obra_total": 1, "obra_et": 1, "obra_spi": 0, "plazo": 6.1, "avance": null}, {"cui": "2555495", "anio": 2022, "rango": "<3.5MM-60MM]", "monto": 6094613, "obra_total": 1, "obra_et": 1, "obra_spi": 0, "plazo": 12.2, "avance": null}, {"cui": "2560245", "anio": 2022, "rango": "[60MM+>", "monto": 83711802.9, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2300162", "anio": 2022, "rango": "<3.5MM-60MM]", "monto": 37183337, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2604928", "anio": 2023, "rango": "<3.5MM-60MM]", "monto": 15273373.1, "obra_total": 1, "obra_et": 1, "obra_spi": 0, "plazo": 25.366666666666667, "avance": null}, {"cui": "2510818", "anio": 2021, "rango": "<3.5MM-60MM]", "monto": 11918693.95, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2603240", "anio": 2023, "rango": "<3.5MM-60MM]", "monto": 6672580.19, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2539673", "anio": 2021, "rango": "<3.5MM-60MM]", "monto": 29301344.49, "obra_total": 1, "obra_et": 1, "obra_spi": 0, "plazo": 5, "avance": null}, {"cui": "2357089", "anio": 2017, "rango": "<3.5MM-60MM]", "monto": 20930372.8, "obra_total": 1, "obra_et": 1, "obra_spi": 0, "plazo": 9.166666666666666, "avance": null}, {"cui": "2570943", "anio": 2022, "rango": "<3.5MM-60MM]", "monto": 13943858.28, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2660479", "anio": 2024, "rango": "<3.5MM-60MM]", "monto": 11929856.51, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2669946", "anio": 2024, "rango": "<3.5MM-60MM]", "monto": 14422527.12, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2681029", "anio": 2025, "rango": "<3.5MM-60MM]", "monto": 30928293.26, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2664647", "anio": 2024, "rango": "<3.5MM-60MM]", "monto": 5797658.1, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2670402", "anio": 2024, "rango": "<3.5MM-60MM]", "monto": 16279117.36, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2650804", "anio": 2024, "rango": "<3.5MM]", "monto": 2766448.22, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2288094", "anio": 2015, "rango": "<3.5MM-60MM]", "monto": 14126071, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2627934", "anio": 2023, "rango": "<3.5MM]", "monto": 2448010.36, "obra_total": 1, "obra_et": 1, "obra_spi": 0, "plazo": 2, "avance": null}, {"cui": "2550162", "anio": 2022, "rango": "<3.5MM-60MM]", "monto": 11611034.77, "obra_total": 1, "obra_et": 1, "obra_spi": 1, "plazo": 2.033333333333333, "avance": 90.80455247151258}, {"cui": "2494743", "anio": 2020, "rango": "<3.5MM-60MM]", "monto": 20733057.78, "obra_total": 1, "obra_et": 1, "obra_spi": 0, "plazo": 5.1, "avance": null}, {"cui": "2528205", "anio": 2021, "rango": "<3.5MM]", "monto": 3217820.19, "obra_total": 1, "obra_et": 1, "obra_spi": 0, "plazo": 2.033333333333333, "avance": null}, {"cui": "2628221", "anio": 2023, "rango": "<3.5MM-60MM]", "monto": 4592953.91, "obra_total": 1, "obra_et": 1, "obra_spi": 0, "plazo": 2, "avance": null}, {"cui": "2577257", "anio": 2023, "rango": "<3.5MM-60MM]", "monto": 4501096.36, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2573568", "anio": 2023, "rango": "<3.5MM]", "monto": 170500, "obra_total": 1, "obra_et": 1, "obra_spi": 0, "plazo": 1, "avance": null}, {"cui": "2472583", "anio": 2019, "rango": "<3.5MM-60MM]", "monto": 4789709.73, "obra_total": 1, "obra_et": 1, "obra_spi": 0, "plazo": 3.066666666666667, "avance": null}, {"cui": "2596829", "anio": 2023, "rango": "<3.5MM-60MM]", "monto": 44649648.14, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2548118", "anio": 2022, "rango": "<3.5MM]", "monto": 1904065.5, "obra_total": 1, "obra_et": 1, "obra_spi": 0, "plazo": 2.033333333333333, "avance": null}, {"cui": "2652422", "anio": 2024, "rango": "<3.5MM]", "monto": 2989799.72, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2693572", "anio": 2025, "rango": "<3.5MM-60MM]", "monto": 10213169.77, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2691764", "anio": 2025, "rango": "<3.5MM]", "monto": 1985624.53, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2643035", "anio": 2024, "rango": "<3.5MM]", "monto": 318582.28, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2549272", "anio": 2022, "rango": "<3.5MM-60MM]", "monto": 16676179.06, "obra_total": 1, "obra_et": 1, "obra_spi": 0, "plazo": 2.033333333333333, "avance": null}, {"cui": "2663079", "anio": 2024, "rango": "<3.5MM]", "monto": 2081341.94, "obra_total": 1, "obra_et": 1, "obra_spi": 0, "plazo": 3.066666666666667, "avance": null}, {"cui": "2659764", "anio": 2024, "rango": "<3.5MM-60MM]", "monto": 7341025.78, "obra_total": 1, "obra_et": 1, "obra_spi": 0, "plazo": 3.033333333333333, "avance": null}, {"cui": "2613260", "anio": 2023, "rango": "<3.5MM-60MM]", "monto": 3952224.16, "obra_total": 1, "obra_et": 1, "obra_spi": 0, "plazo": 3.066666666666667, "avance": null}, {"cui": "2590081", "anio": 2023, "rango": "<3.5MM-60MM]", "monto": 6734772.34, "obra_total": 1, "obra_et": 1, "obra_spi": 0, "plazo": 2.033333333333333, "avance": null}, {"cui": "2616986", "anio": 2023, "rango": "<3.5MM-60MM]", "monto": 8134229.23, "obra_total": 1, "obra_et": 1, "obra_spi": 0, "plazo": 4.033333333333333, "avance": null}, {"cui": "2383890", "anio": 2018, "rango": "<3.5MM-60MM]", "monto": 45944098.41, "obra_total": 1, "obra_et": 1, "obra_spi": 1, "plazo": 3, "avance": 100}, {"cui": "2566236", "anio": 2022, "rango": "<3.5MM-60MM]", "monto": 28250143.01, "obra_total": 1, "obra_et": 1, "obra_spi": 1, "plazo": 5.1, "avance": 100}, {"cui": "2376860", "anio": 2018, "rango": "<3.5MM-60MM]", "monto": 20911082, "obra_total": 1, "obra_et": 1, "obra_spi": 1, "plazo": 6.1, "avance": 34.35551037829014}, {"cui": "2300859", "anio": 2015, "rango": "[60MM+>", "monto": 87606361, "obra_total": 1, "obra_et": 0, "obra_spi": 1, "plazo": null, "avance": 89.76489124131815}, {"cui": "2300104", "anio": 2015, "rango": "[60MM+>", "monto": 63713100, "obra_total": 1, "obra_et": 0, "obra_spi": 1, "plazo": null, "avance": 66.87006833929587}, {"cui": "2571710", "anio": 2022, "rango": "<3.5MM-60MM]", "monto": 23086700.19, "obra_total": 1, "obra_et": 1, "obra_spi": 0, "plazo": 20.366666666666667, "avance": null}, {"cui": "2510864", "anio": 2021, "rango": "[60MM+>", "monto": 87138887.09, "obra_total": 1, "obra_et": 1, "obra_spi": 1, "plazo": 5.1, "avance": 68.89293471407629}, {"cui": "2509421", "anio": 2021, "rango": "<3.5MM-60MM]", "monto": 14477562.48, "obra_total": 1, "obra_et": 1, "obra_spi": 0, "plazo": 12.166666666666666, "avance": null}, {"cui": "2491980", "anio": 2020, "rango": "<3.5MM-60MM]", "monto": 8412716.84, "obra_total": 1, "obra_et": 0, "obra_spi": 1, "plazo": null, "avance": 79.22082546375661}, {"cui": "2497574", "anio": 2020, "rango": "<3.5MM-60MM]", "monto": 6331980.53, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2496415", "anio": 2020, "rango": "<3.5MM-60MM]", "monto": 12175786.27, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2426562", "anio": 2018, "rango": "<3.5MM-60MM]", "monto": 26737915, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2497576", "anio": 2020, "rango": "<3.5MM]", "monto": 1607026.79, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2593899", "anio": 2023, "rango": "<3.5MM-60MM]", "monto": 30029154.04, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2435333", "anio": 2018, "rango": "<3.5MM-60MM]", "monto": 12712119.7, "obra_total": 1, "obra_et": 1, "obra_spi": 0, "plazo": 3, "avance": null}, {"cui": "2379296", "anio": 2012, "rango": "<3.5MM-60MM]", "monto": 50570955, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2392641", "anio": 2018, "rango": "[60MM+>", "monto": 647279050.59, "obra_total": 2, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2318535", "anio": 2011, "rango": "[60MM+>", "monto": 1138158711, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2546400", "anio": 2022, "rango": "[60MM+>", "monto": 362228962.53, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2234988", "anio": 2008, "rango": "[60MM+>", "monto": 498643350, "obra_total": 1, "obra_et": 0, "obra_spi": 1, "plazo": null, "avance": 40.842876617509276}, {"cui": "2192666", "anio": 2001, "rango": "[60MM+>", "monto": 1128900260, "obra_total": 1, "obra_et": 0, "obra_spi": 1, "plazo": null, "avance": 82.49197693571158}, {"cui": "2234985", "anio": 2013, "rango": "[60MM+>", "monto": 397375465, "obra_total": 1, "obra_et": 0, "obra_spi": 1, "plazo": null, "avance": 92.28173847198721}, {"cui": "2110320", "anio": 2002, "rango": "[60MM+>", "monto": 466465816, "obra_total": 1, "obra_et": 0, "obra_spi": 1, "plazo": null, "avance": 87.3045474955687}, {"cui": "2046177", "anio": 2007, "rango": "[60MM+>", "monto": 373326144, "obra_total": 1, "obra_et": 0, "obra_spi": 1, "plazo": null, "avance": 33.78276437991008}, {"cui": "2543788", "anio": 2022, "rango": "[60MM+>", "monto": 310753054.11, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2511043", "anio": 2021, "rango": "[60MM+>", "monto": 570778210.99, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2543519", "anio": 2022, "rango": "[60MM+>", "monto": 693117824.54, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2313265", "anio": 2020, "rango": "[60MM+>", "monto": 1856498270.46, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2131925", "anio": 2018, "rango": "[60MM+>", "monto": 1003772445.37, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2337718", "anio": 2019, "rango": "[60MM+>", "monto": 1014786798.54, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2343744", "anio": 2012, "rango": "<3.5MM-60MM]", "monto": 38367998, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2402106", "anio": 2017, "rango": "[60MM+>", "monto": 135624941.49, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2455491", "anio": 2019, "rango": "<3.5MM-60MM]", "monto": 15855901.99, "obra_total": 2, "obra_et": 2, "obra_spi": 2, "plazo": 7.766666666666667, "avance": 95.93101253991429}, {"cui": "2455343", "anio": 2019, "rango": "<3.5MM-60MM]", "monto": 21373993.92, "obra_total": 2, "obra_et": 2, "obra_spi": 2, "plazo": 5.066666666666666, "avance": 83.73750878247829}, {"cui": "2465303", "anio": 2019, "rango": "<3.5MM-60MM]", "monto": 25164631.29, "obra_total": 2, "obra_et": 2, "obra_spi": 2, "plazo": 8.366666666666667, "avance": 95.41857337515826}, {"cui": "2456100", "anio": 2019, "rango": "<3.5MM-60MM]", "monto": 19460247.92, "obra_total": 2, "obra_et": 2, "obra_spi": 2, "plazo": 6.6, "avance": 100}, {"cui": "2456389", "anio": 2019, "rango": "<3.5MM-60MM]", "monto": 48891689.87, "obra_total": 2, "obra_et": 2, "obra_spi": 2, "plazo": 6.6, "avance": 94.97643610161657}, {"cui": "2475493", "anio": 2019, "rango": "<3.5MM-60MM]", "monto": 22614841.91, "obra_total": 2, "obra_et": 2, "obra_spi": 2, "plazo": 8.366666666666667, "avance": 94.9672746910529}, {"cui": "2488285", "anio": 2020, "rango": "<3.5MM-60MM]", "monto": 26469151.83, "obra_total": 2, "obra_et": 2, "obra_spi": 2, "plazo": 8.366666666666667, "avance": 92.90039891869395}, {"cui": "2433311", "anio": 2018, "rango": "<3.5MM-60MM]", "monto": 23619545.35, "obra_total": 2, "obra_et": 2, "obra_spi": 2, "plazo": 6.833333333333333, "avance": 91.62687811383262}, {"cui": "2457231", "anio": 2019, "rango": "<3.5MM-60MM]", "monto": 27398310.86, "obra_total": 2, "obra_et": 2, "obra_spi": 2, "plazo": 6.833333333333333, "avance": 96.89250542477082}, {"cui": "2460031", "anio": 2019, "rango": "<3.5MM-60MM]", "monto": 38737594.92, "obra_total": 2, "obra_et": 2, "obra_spi": 2, "plazo": 19.333333333333332, "avance": 95.7144860397255}, {"cui": "2459062", "anio": 2019, "rango": "<3.5MM-60MM]", "monto": 25549084.09, "obra_total": 2, "obra_et": 2, "obra_spi": 2, "plazo": 4.066666666666666, "avance": 51.91332091549159}, {"cui": "2466948", "anio": 2019, "rango": "<3.5MM-60MM]", "monto": 20673568.78, "obra_total": 2, "obra_et": 2, "obra_spi": 2, "plazo": 6.833333333333333, "avance": 50.66826767459316}, {"cui": "2468424", "anio": 2019, "rango": "<3.5MM-60MM]", "monto": 45654280.85, "obra_total": 2, "obra_et": 2, "obra_spi": 2, "plazo": 6.866666666666666, "avance": 100}, {"cui": "2465018", "anio": 2019, "rango": "<3.5MM-60MM]", "monto": 42998882.88, "obra_total": 2, "obra_et": 2, "obra_spi": 2, "plazo": 4.066666666666666, "avance": 73.49282349321842}, {"cui": "2471211", "anio": 2019, "rango": "<3.5MM-60MM]", "monto": 17993342.45, "obra_total": 2, "obra_et": 2, "obra_spi": 2, "plazo": 6.833333333333333, "avance": 91.10463697323567}, {"cui": "2465785", "anio": 2019, "rango": "<3.5MM-60MM]", "monto": 39165421.6, "obra_total": 2, "obra_et": 2, "obra_spi": 2, "plazo": 4.1, "avance": 77.77279116380655}, {"cui": "2475360", "anio": 2019, "rango": "<3.5MM-60MM]", "monto": 36145681.85, "obra_total": 2, "obra_et": 2, "obra_spi": 2, "plazo": 6.833333333333333, "avance": 95.30031733010225}, {"cui": "2475363", "anio": 2019, "rango": "<3.5MM-60MM]", "monto": 55826829.43, "obra_total": 2, "obra_et": 2, "obra_spi": 2, "plazo": 6.833333333333333, "avance": 98.51687857671459}, {"cui": "2475458", "anio": 2019, "rango": "<3.5MM-60MM]", "monto": 23374802.2, "obra_total": 2, "obra_et": 2, "obra_spi": 2, "plazo": 4.1, "avance": 89.81577302622004}, {"cui": "2475484", "anio": 2019, "rango": "<3.5MM-60MM]", "monto": 36370150.76, "obra_total": 2, "obra_et": 2, "obra_spi": 2, "plazo": 4.066666666666666, "avance": 95.5718984563866}, {"cui": "2475546", "anio": 2020, "rango": "<3.5MM-60MM]", "monto": 24138166.99, "obra_total": 1, "obra_et": 1, "obra_spi": 1, "plazo": 6.833333333333333, "avance": 88.46211288942007}, {"cui": "2481404", "anio": 2020, "rango": "<3.5MM-60MM]", "monto": 37269135.98, "obra_total": 2, "obra_et": 2, "obra_spi": 2, "plazo": 6.833333333333333, "avance": 90.91009108312151}, {"cui": "2471292", "anio": 2019, "rango": "<3.5MM-60MM]", "monto": 40867560.74, "obra_total": 2, "obra_et": 2, "obra_spi": 2, "plazo": 3.066666666666667, "avance": 75.72225572608656}, {"cui": "2473418", "anio": 2019, "rango": "<3.5MM-60MM]", "monto": 30395776.63, "obra_total": 2, "obra_et": 2, "obra_spi": 2, "plazo": 4.066666666666666, "avance": 95.47773981857799}, {"cui": "2473874", "anio": 2019, "rango": "<3.5MM-60MM]", "monto": 19891628.16, "obra_total": 2, "obra_et": 2, "obra_spi": 2, "plazo": 4.066666666666666, "avance": 100}, {"cui": "2474099", "anio": 2019, "rango": "<3.5MM-60MM]", "monto": 57711468.31, "obra_total": 2, "obra_et": 2, "obra_spi": 2, "plazo": 5.1, "avance": 94.2377422821399}, {"cui": "2475306", "anio": 2019, "rango": "<3.5MM-60MM]", "monto": 21765846.77, "obra_total": 1, "obra_et": 1, "obra_spi": 1, "plazo": 4.066666666666666, "avance": 78.96055209668017}, {"cui": "2485504", "anio": 2020, "rango": "<3.5MM-60MM]", "monto": 36741131.09, "obra_total": 2, "obra_et": 2, "obra_spi": 2, "plazo": 6.833333333333333, "avance": 97.27707384728713}, {"cui": "2489056", "anio": 2020, "rango": "<3.5MM-60MM]", "monto": 57464580.97, "obra_total": 2, "obra_et": 2, "obra_spi": 2, "plazo": 6.833333333333333, "avance": 97.87842489841707}, {"cui": "2457878", "anio": 2019, "rango": "<3.5MM-60MM]", "monto": 34053029.58, "obra_total": 2, "obra_et": 2, "obra_spi": 2, "plazo": 1, "avance": 92.30020533452401}, {"cui": "2461341", "anio": 2019, "rango": "<3.5MM-60MM]", "monto": 27023597.63, "obra_total": 2, "obra_et": 2, "obra_spi": 2, "plazo": 3.066666666666667, "avance": 81.60591359512233}, {"cui": "2468688", "anio": 2019, "rango": "[60MM+>", "monto": 70038335.57, "obra_total": 2, "obra_et": 2, "obra_spi": 2, "plazo": 6.766666666666667, "avance": 84.24788589804241}, {"cui": "2475512", "anio": 2020, "rango": "<3.5MM-60MM]", "monto": 27511310.25, "obra_total": 1, "obra_et": 1, "obra_spi": 1, "plazo": 4.066666666666666, "avance": 75.5682865570482}, {"cui": "2475527", "anio": 2020, "rango": "<3.5MM-60MM]", "monto": 55561178.43, "obra_total": 2, "obra_et": 2, "obra_spi": 2, "plazo": 6.533333333333333, "avance": 77.97810498744995}, {"cui": "2475674", "anio": 2020, "rango": "<3.5MM-60MM]", "monto": 31509065.54, "obra_total": 2, "obra_et": 2, "obra_spi": 2, "plazo": 4.066666666666666, "avance": 81.36605808595205}, {"cui": "2475599", "anio": 2020, "rango": "<3.5MM-60MM]", "monto": 35004217.73, "obra_total": 2, "obra_et": 2, "obra_spi": 2, "plazo": 4.066666666666666, "avance": 72.69490234683502}, {"cui": "2475706", "anio": 2020, "rango": "<3.5MM-60MM]", "monto": 35556429.56, "obra_total": 2, "obra_et": 2, "obra_spi": 2, "plazo": 4.066666666666666, "avance": 86.79905251499108}, {"cui": "2481449", "anio": 2020, "rango": "<3.5MM-60MM]", "monto": 58165727.4, "obra_total": 2, "obra_et": 2, "obra_spi": 2, "plazo": 6.766666666666667, "avance": 88.00829684973722}, {"cui": "2485212", "anio": 2020, "rango": "<3.5MM-60MM]", "monto": 30579150.09, "obra_total": 2, "obra_et": 2, "obra_spi": 2, "plazo": 5.1, "avance": 87.39986558810216}, {"cui": "2480537", "anio": 2020, "rango": "<3.5MM-60MM]", "monto": 24406491.19, "obra_total": 2, "obra_et": 2, "obra_spi": 2, "plazo": 23.9, "avance": 89.80856719244159}, {"cui": "2480603", "anio": 2020, "rango": "<3.5MM-60MM]", "monto": 38816561.2, "obra_total": 2, "obra_et": 2, "obra_spi": 2, "plazo": 17.233333333333334, "avance": 89.48437972271421}, {"cui": "2480681", "anio": 2020, "rango": "<3.5MM-60MM]", "monto": 32082677.93, "obra_total": 2, "obra_et": 2, "obra_spi": 2, "plazo": 17.233333333333334, "avance": 97.98853783066227}, {"cui": "2480865", "anio": 2020, "rango": "<3.5MM-60MM]", "monto": 38554225.69, "obra_total": 2, "obra_et": 2, "obra_spi": 2, "plazo": 6.533333333333333, "avance": 76.5963802104176}, {"cui": "2485617", "anio": 2020, "rango": "<3.5MM-60MM]", "monto": 14368588.93, "obra_total": 2, "obra_et": 2, "obra_spi": 2, "plazo": 3.066666666666667, "avance": 76.34086012195186}, {"cui": "2459714", "anio": 2019, "rango": "<3.5MM-60MM]", "monto": 35569630.97, "obra_total": 2, "obra_et": 2, "obra_spi": 2, "plazo": 8.033333333333333, "avance": 83.84179264784915}, {"cui": "2481555", "anio": 2020, "rango": "<3.5MM-60MM]", "monto": 50536790.75, "obra_total": 2, "obra_et": 2, "obra_spi": 2, "plazo": 4.066666666666666, "avance": 59.52795100745121}, {"cui": "2481775", "anio": 2020, "rango": "<3.5MM-60MM]", "monto": 25319617.54, "obra_total": 2, "obra_et": 2, "obra_spi": 2, "plazo": 6.533333333333333, "avance": 81.34404278567148}, {"cui": "2482024", "anio": 2020, "rango": "<3.5MM-60MM]", "monto": 33218383.86, "obra_total": 2, "obra_et": 2, "obra_spi": 2, "plazo": 5.1, "avance": 86.7511532789352}, {"cui": "2482573", "anio": 2020, "rango": "<3.5MM-60MM]", "monto": 51794157.04, "obra_total": 2, "obra_et": 2, "obra_spi": 2, "plazo": 6.033333333333333, "avance": 67.70588709353198}, {"cui": "2462240", "anio": 2019, "rango": "<3.5MM-60MM]", "monto": 29195898.6, "obra_total": 2, "obra_et": 2, "obra_spi": 2, "plazo": 7.7, "avance": 84.15492137674563}, {"cui": "2463380", "anio": 2019, "rango": "<3.5MM-60MM]", "monto": 28527428.61, "obra_total": 2, "obra_et": 2, "obra_spi": 2, "plazo": 3.066666666666667, "avance": 91.81365232567813}, {"cui": "2482973", "anio": 2020, "rango": "[60MM+>", "monto": 77121872.58, "obra_total": 2, "obra_et": 2, "obra_spi": 2, "plazo": 6.6, "avance": 100}, {"cui": "2483179", "anio": 2020, "rango": "[60MM+>", "monto": 61594188.88, "obra_total": 2, "obra_et": 2, "obra_spi": 2, "plazo": 6.833333333333333, "avance": 77.02486043944502}, {"cui": "2483701", "anio": 2020, "rango": "<3.5MM-60MM]", "monto": 30516473.97, "obra_total": 2, "obra_et": 2, "obra_spi": 2, "plazo": 6.833333333333333, "avance": 91.62806834763575}, {"cui": "2468576", "anio": 2019, "rango": "<3.5MM-60MM]", "monto": 26543438.76, "obra_total": 2, "obra_et": 2, "obra_spi": 2, "plazo": 7.766666666666667, "avance": 81.96904378725743}, {"cui": "2485232", "anio": 2020, "rango": "[60MM+>", "monto": 61925058.8, "obra_total": 2, "obra_et": 2, "obra_spi": 2, "plazo": 8.1, "avance": 93.99663941992439}, {"cui": "2485449", "anio": 2020, "rango": "<3.5MM-60MM]", "monto": 54147524.61, "obra_total": 2, "obra_et": 2, "obra_spi": 2, "plazo": 7.066666666666666, "avance": 69.65454095326392}, {"cui": "2471210", "anio": 2019, "rango": "<3.5MM-60MM]", "monto": 26083651.46, "obra_total": 2, "obra_et": 2, "obra_spi": 2, "plazo": 4.066666666666666, "avance": 78.00245540863331}, {"cui": "2475656", "anio": 2020, "rango": "<3.5MM-60MM]", "monto": 24005115.64, "obra_total": 2, "obra_et": 2, "obra_spi": 2, "plazo": 7.233333333333333, "avance": 87.1606934064175}, {"cui": "2482927", "anio": 2020, "rango": "<3.5MM-60MM]", "monto": 47500701.42, "obra_total": 2, "obra_et": 2, "obra_spi": 2, "plazo": 6.033333333333333, "avance": 89.60030424928969}, {"cui": "2485468", "anio": 2020, "rango": "<3.5MM-60MM]", "monto": 26362375.72, "obra_total": 2, "obra_et": 2, "obra_spi": 2, "plazo": 7.233333333333333, "avance": 85.5313463445054}, {"cui": "2487501", "anio": 2020, "rango": "<3.5MM-60MM]", "monto": 29307579.95, "obra_total": 2, "obra_et": 2, "obra_spi": 2, "plazo": 6.533333333333333, "avance": 67.40492989224364}, {"cui": "2485549", "anio": 2020, "rango": "<3.5MM-60MM]", "monto": 47448642.89, "obra_total": 2, "obra_et": 2, "obra_spi": 2, "plazo": 6.033333333333333, "avance": 86.71960598388205}, {"cui": "2487949", "anio": 2020, "rango": "<3.5MM-60MM]", "monto": 27856757.05, "obra_total": 2, "obra_et": 2, "obra_spi": 2, "plazo": 4.066666666666666, "avance": 61.66671096511901}, {"cui": "2488279", "anio": 2020, "rango": "<3.5MM-60MM]", "monto": 33232914.29, "obra_total": 2, "obra_et": 2, "obra_spi": 2, "plazo": 5.033333333333333, "avance": 81.53173105564271}, {"cui": "2488856", "anio": 2020, "rango": "<3.5MM-60MM]", "monto": 38117505.15, "obra_total": 2, "obra_et": 2, "obra_spi": 2, "plazo": 6.833333333333333, "avance": 79.8731661171905}, {"cui": "2488993", "anio": 2020, "rango": "<3.5MM-60MM]", "monto": 35549339.29, "obra_total": 2, "obra_et": 2, "obra_spi": 2, "plazo": 4.066666666666666, "avance": 90.98169049195863}, {"cui": "2482810", "anio": 2020, "rango": "[60MM+>", "monto": 63099628.66, "obra_total": 2, "obra_et": 2, "obra_spi": 2, "plazo": 4.066666666666666, "avance": 83.99402075148514}, {"cui": "2489000", "anio": 2020, "rango": "<3.5MM-60MM]", "monto": 37658549.48, "obra_total": 2, "obra_et": 2, "obra_spi": 2, "plazo": 5.033333333333333, "avance": 89.45736653247792}, {"cui": "2489002", "anio": 2020, "rango": "[60MM+>", "monto": 60522729.26, "obra_total": 2, "obra_et": 2, "obra_spi": 2, "plazo": 23.9, "avance": 88.10778559641163}, {"cui": "2489010", "anio": 2020, "rango": "<3.5MM-60MM]", "monto": 39097099.33, "obra_total": 2, "obra_et": 2, "obra_spi": 2, "plazo": 15.166666666666666, "avance": 95.055629002046}, {"cui": "2488994", "anio": 2020, "rango": "<3.5MM-60MM]", "monto": 48095937.32, "obra_total": 2, "obra_et": 2, "obra_spi": 2, "plazo": 18.233333333333334, "avance": 92.33754265323155}, {"cui": "2489032", "anio": 2020, "rango": "<3.5MM-60MM]", "monto": 40050976.13, "obra_total": 2, "obra_et": 2, "obra_spi": 2, "plazo": 6.6, "avance": 93.56333294957957}, {"cui": "2489023", "anio": 2020, "rango": "<3.5MM-60MM]", "monto": 46589137.37, "obra_total": 2, "obra_et": 2, "obra_spi": 2, "plazo": 5.033333333333333, "avance": 90.5630623200262}, {"cui": "2489076", "anio": 2020, "rango": "<3.5MM-60MM]", "monto": 53591237.77, "obra_total": 1, "obra_et": 1, "obra_spi": 1, "plazo": 5.033333333333333, "avance": 89.47963242687644}, {"cui": "2408189", "anio": 2015, "rango": "[60MM+>", "monto": 6771889600, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2507462", "anio": 2020, "rango": "<3.5MM]", "monto": 2752895.28, "obra_total": 1, "obra_et": 1, "obra_spi": 0, "plazo": 8.6, "avance": null}, {"cui": "2285114", "anio": 2020, "rango": "<3.5MM-60MM]", "monto": 5658186.98, "obra_total": 1, "obra_et": 1, "obra_spi": 0, "plazo": 8.6, "avance": null}, {"cui": "2382880", "anio": 2017, "rango": "[60MM+>", "monto": 219856025.21, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2669383", "anio": 2024, "rango": "[60MM+>", "monto": 600713404.82, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2558582", "anio": 2022, "rango": "[60MM+>", "monto": 133485186.54, "obra_total": 1, "obra_et": 0, "obra_spi": 1, "plazo": 0, "avance": 0}, {"cui": "2558584", "anio": 2022, "rango": "[60MM+>", "monto": 72502898.4, "obra_total": 1, "obra_et": 0, "obra_spi": 1, "plazo": 0, "avance": 0}, {"cui": "2558585", "anio": 2022, "rango": "[60MM+>", "monto": 140239275.16, "obra_total": 1, "obra_et": 0, "obra_spi": 1, "plazo": 0, "avance": 0}, {"cui": "2650022", "anio": 2024, "rango": "[60MM+>", "monto": 1188057406.05, "obra_total": 1, "obra_et": 1, "obra_spi": 0, "plazo": 14.133333333333333, "avance": null}, {"cui": "2435221", "anio": 2018, "rango": "<3.5MM-60MM]", "monto": 11109869.74, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2558786", "anio": 2022, "rango": "[60MM+>", "monto": 1460816141.91, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2559071", "anio": 2022, "rango": "[60MM+>", "monto": 162667235.26, "obra_total": 1, "obra_et": 1, "obra_spi": 0, "plazo": 14.866666666666667, "avance": null}, {"cui": "2568071", "anio": 2022, "rango": "[60MM+>", "monto": 109929158.06, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2572333", "anio": 2022, "rango": "<3.5MM-60MM]", "monto": 42668182.7, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2573192", "anio": 2023, "rango": "<3.5MM-60MM]", "monto": 22526931.57, "obra_total": 1, "obra_et": 1, "obra_spi": 0, "plazo": 4.133333333333334, "avance": null}, {"cui": "2578670", "anio": 2023, "rango": "<3.5MM-60MM]", "monto": 13950760.62, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2578738", "anio": 2023, "rango": "<3.5MM-60MM]", "monto": 13266438.46, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2579097", "anio": 2023, "rango": "<3.5MM-60MM]", "monto": 16565211.45, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2593150", "anio": 2023, "rango": "<3.5MM-60MM]", "monto": 25376775.02, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2596157", "anio": 2023, "rango": "[60MM+>", "monto": 302895159.95, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}, {"cui": "2596426", "anio": 2023, "rango": "<3.5MM-60MM]", "monto": 17261271.06, "obra_total": 1, "obra_et": 0, "obra_spi": 0, "plazo": 0, "avance": null}];
+
+let chartAnio = null;
+
+function filtrar() {
+  const rango = document.getElementById('filtroRango').value;
+  const desde = parseInt(document.getElementById('filtroAnioDesde').value);
+  const hasta = parseInt(document.getElementById('filtroAnioHasta').value);
+  return DATA.filter(d => {
+    const okRango = rango === 'todos' || d.rango === rango;
+    const okAnio = d.anio !== null && d.anio >= desde && d.anio <= hasta;
+    return okRango && okAnio;
+  });
+}
+
+function sumarCampo(datos, campo) {
+  return datos.reduce((acc, d) => acc + (Number(d[campo]) || 0), 0);
+}
+
+function calcularIndicadores(datos) {
+  const rangos = ['<3.5MM]', '<3.5MM-60MM]', '[60MM+>'];
+  const labels = { '<3.5MM]': 'Pequeñas (<3.5M)', '<3.5MM-60MM]': 'Medianas (3.5M–60M)', '[60MM+>': 'Grandes (+60M)' };
+  const colores = { '<3.5MM]': '#1d9e75', '<3.5MM-60MM]': '#378add', '[60MM+>': '#ba7517' };
+  const clases = { '<3.5MM]': 'badge-teal', '<3.5MM-60MM]': 'badge-blue', '[60MM+>': 'badge-amber' };
+
+  const etResultados = rangos.map(r => {
+    const sub = datos.filter(d => d.rango === r && (Number(d.obra_et) || 0) > 0 && d.plazo !== null && Number(d.plazo) > 0);
+    const n = sumarCampo(sub, 'obra_et');
+    const sumaPlazo = sub.reduce((a, b) => a + (Number(b.plazo) || 0), 0);
+    return { rango: r, label: labels[r], n, prom: n > 0 ? sumaPlazo / n : null, color: colores[r], clase: clases[r] };
+  }).filter(x => x.n > 0);
+
+  const spiResultados = rangos.map(r => {
+    const sub = datos.filter(d => d.rango === r && (Number(d.obra_spi) || 0) > 0 && d.avance !== null);
+    const n = sumarCampo(sub, 'obra_spi');
+    const sumaAvance = sub.reduce((a, b) => a + (Number(b.avance) || 0), 0);
+    return { rango: r, label: labels[r], n, prom: n > 0 ? sumaAvance / n : null, color: colores[r], clase: clases[r] };
+  }).filter(x => x.n > 0);
+
+  return { etResultados, spiResultados };
+}
+
+function render() {
+  const datos = filtrar();
+  const desde = parseInt(document.getElementById('filtroAnioDesde').value);
+  const hasta = parseInt(document.getElementById('filtroAnioHasta').value);
+  const rango = document.getElementById('filtroRango').value;
+
+  document.getElementById('labelDesde').textContent = 'Desde ' + desde;
+  document.getElementById('labelHasta').textContent = 'Hasta ' + hasta;
+
+  const totalObras = sumarCampo(datos, 'obra_total');
+  let noteStr = `Mostrando ${totalObras} obras`;
+  if (desde > 2001 || hasta < 2025) noteStr += ` registradas entre ${desde} y ${hasta}`;
+  if (rango !== 'todos') noteStr += ` — solo rango: ${rango}`;
+  document.getElementById('filterNote').textContent = noteStr + '.';
+
+  const conET = sumarCampo(datos, 'obra_et');
+  const conSPI = sumarCampo(datos, 'obra_spi');
+  const sinAmbos = sumarCampo(datos.filter(d => (Number(d.obra_et) || 0) === 0 && (Number(d.obra_spi) || 0) === 0), 'obra_total');
+
+  document.getElementById('mTotal').textContent = totalObras.toLocaleString('es-PE');
+  document.getElementById('mET').textContent = conET.toLocaleString('es-PE');
+  document.getElementById('mSPI').textContent = conSPI.toLocaleString('es-PE');
+  document.getElementById('mSin').textContent = sinAmbos.toLocaleString('es-PE');
+
+  const { etResultados, spiResultados } = calcularIndicadores(datos);
+  const maxET = Math.max(...etResultados.map(x => x.prom || 0), 1);
+  const maxSPI = 100;
+
+  const tbodyET = document.querySelector('#tablaET tbody');
+  tbodyET.innerHTML = '';
+  if (etResultados.length === 0) {
+    tbodyET.innerHTML = '<tr><td colspan="4" class="no-data">Sin datos para el filtro seleccionado</td></tr>';
+  } else {
+    etResultados.forEach(r => {
+      const pct = ((r.prom || 0) / maxET * 100).toFixed(0);
+      tbodyET.innerHTML += `<tr>
+        <td><span class="badge ${r.clase}">${r.label}</span></td>
+        <td>${Number(r.n).toLocaleString('es-PE')}</td>
+        <td><strong>${r.prom !== null ? r.prom.toFixed(1) : '—'}</strong></td>
+        <td><div class="bar-mini"><div class="bar-mini-fill" style="width:${pct}%;background:${r.color}"></div></div></td>
+      </tr>`;
+    });
+  }
+
+  if (etResultados.length > 0) {
+    const valores = etResultados.map(x => x.prom).filter(v => v !== null);
+    const maxProm = Math.max(...valores);
+    const minProm = Math.min(...valores);
+    document.getElementById('insightET').innerHTML = `<strong>Lectura:</strong> En el filtro seleccionado, el plazo promedio oscila entre <strong>${minProm.toFixed(1)}</strong> y <strong>${maxProm.toFixed(1)}</strong> meses.`;
+  } else {
+    document.getElementById('insightET').innerHTML = 'No hay obras con datos de Expediente Técnico en este filtro.';
+  }
+
+  const tbodySPI = document.querySelector('#tablaSPI tbody');
+  tbodySPI.innerHTML = '';
+  if (spiResultados.length === 0) {
+    tbodySPI.innerHTML = '<tr><td colspan="4" class="no-data">Sin datos de avance para el filtro seleccionado</td></tr>';
+  } else {
+    spiResultados.forEach(r => {
+      const pct = ((r.prom || 0) / maxSPI * 100).toFixed(0);
+      tbodySPI.innerHTML += `<tr>
+        <td><span class="badge ${r.clase}">${r.label}</span></td>
+        <td>${Number(r.n).toLocaleString('es-PE')}</td>
+        <td><strong>${r.prom !== null ? r.prom.toFixed(1) + '%' : '—'}</strong></td>
+        <td><div class="bar-mini"><div class="bar-mini-fill" style="width:${pct}%;background:${r.color}"></div></div></td>
+      </tr>`;
+    });
+  }
+
+  if (spiResultados.length > 0) {
+    const totalSPIObras = spiResultados.reduce((a, b) => a + (Number(b.n) || 0), 0);
+    const sumaPonderadaSPI = spiResultados.reduce((a, b) => a + ((Number(b.prom) || 0) * (Number(b.n) || 0)), 0);
+    const avgSPI = totalSPIObras > 0 ? sumaPonderadaSPI / totalSPIObras : 0;
+    const tag = avgSPI < 50 ? '⚠ Alerta: el avance real está por debajo del 50% de lo programado.' : avgSPI < 75 ? 'Atención: el avance real está entre 50% y 75% de lo programado.' : 'El rendimiento de plazos está en niveles aceptables para el filtro seleccionado.';
+    document.getElementById('insightSPI').innerHTML = `<strong>Lectura:</strong> El SPI promedio del filtro es <strong>${avgSPI.toFixed(1)}%</strong>. ${tag}`;
+  } else {
+    document.getElementById('insightSPI').innerHTML = 'No hay obras con seguimiento SPI en este filtro.';
+  }
+
+  const etEjec = sumarCampo(datos.filter(d => (Number(d.obra_et) || 0) > 0 && (Number(d.obra_spi) || 0) > 0), 'obra_total');
+  const soloET = sumarCampo(datos.filter(d => (Number(d.obra_et) || 0) > 0 && (Number(d.obra_spi) || 0) === 0), 'obra_total');
+  const soloEjec = sumarCampo(datos.filter(d => (Number(d.obra_et) || 0) === 0 && (Number(d.obra_spi) || 0) > 0), 'obra_total');
+  const nada = sumarCampo(datos.filter(d => (Number(d.obra_et) || 0) === 0 && (Number(d.obra_spi) || 0) === 0), 'obra_total');
+  const total = totalObras || 1;
+  const compData = [
+    { label: 'Con ET y ejecución (SPI)', n: etEjec, color: '#378add' },
+    { label: 'Solo Expediente Técnico', n: soloET, color: '#1d9e75' },
+    { label: 'Solo ejecución (sin ET en banco)', n: soloEjec, color: '#ba7517' },
+    { label: 'Sin ET ni ejecución', n: nada, color: '#e24b4a' },
+  ];
+  document.getElementById('composicion').innerHTML = compData.map(c => `
+    <div class="comp-row">
+      <div class="comp-dot" style="background:${c.color}"></div>
+      <span class="comp-label">${c.label}</span>
+      <span class="comp-num">${Number(c.n).toLocaleString('es-PE')}</span>
+      <span class="comp-pct">${((c.n / total) * 100).toFixed(0)}%</span>
+    </div>
+  `).join('');
+
+  const anioCount = {};
+  datos.forEach(d => {
+    if (d.anio) anioCount[d.anio] = (anioCount[d.anio] || 0) + (Number(d.obra_total) || 0);
+  });
+  const sortedAnios = Object.keys(anioCount).map(Number).sort((a, b) => a - b);
+  const chartLabels = sortedAnios.map(String);
+  const chartVals = sortedAnios.map(a => anioCount[a]);
+
+  if (chartAnio) chartAnio.destroy();
+  const ctx = document.getElementById('chartAnio').getContext('2d');
+  chartAnio = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: chartLabels,
+      datasets: [{
+        label: 'Obras',
+        data: chartVals,
+        backgroundColor: '#378add',
+        borderRadius: 3,
+        borderSkipped: false,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { font: { size: 10 }, maxRotation: 45, autoSkip: false }, grid: { display: false } },
+        y: { ticks: { font: { size: 11 }, stepSize: 1 }, grid: { color: '#f0ede8' } }
+      }
+    }
+  });
+}
+
+document.getElementById('filtroRango').addEventListener('change', render);
+document.getElementById('filtroAnioDesde').addEventListener('input', () => {
+  const v = parseInt(document.getElementById('filtroAnioDesde').value);
+  const h = parseInt(document.getElementById('filtroAnioHasta').value);
+  if (v > h) document.getElementById('filtroAnioHasta').value = v;
+  render();
+});
+document.getElementById('filtroAnioHasta').addEventListener('input', () => {
+  const v = parseInt(document.getElementById('filtroAnioDesde').value);
+  const h = parseInt(document.getElementById('filtroAnioHasta').value);
+  if (h < v) document.getElementById('filtroAnioDesde').value = h;
+  render();
+});
+
+function resetFiltros() {
+  document.getElementById('filtroRango').value = 'todos';
+  document.getElementById('filtroAnioDesde').value = 2001;
+  document.getElementById('filtroAnioHasta').value = 2025;
+  render();
+}
+
+render();
+</script>
+</body>
+</html>
